@@ -1,3 +1,0 @@
-# translating-project
-
-Requirements
