@@ -1,6 +1,8 @@
 import os
 import whisper
 import ffmpeg
+import deepl
+import creds
 from gtts import gTTS
 from pydub import AudioSegment
 from transformers import MarianMTModel, MarianTokenizer
@@ -8,10 +10,12 @@ import subprocess
 from pydub import AudioSegment
 import tempfile
 
-INPUT_VIDEO = "input.mp4"
+INPUT_VIDEO = "videos/input.mp4"
 EXTRACTED_AUDIO = "audio.wav"
 TRANSLATED_AUDIO = "translated_audio.wav"
 OUTPUT_VIDEO = "translated_video.mp4"
+
+translator = deepl.Translator(creds.auth_key)
 
 # === 1. Extraire l’audio de la vidéo ===
 def extract_audio(video_path, audio_path):
@@ -32,14 +36,9 @@ def transcribe_audio(audio_path):
     return segments
 
 # === 3. Traduire le texte ===
-def translate_text(text, src_lang="en", tgt_lang="fr"):
-    model_name = f"Helsinki-NLP/opus-mt-{src_lang}-{tgt_lang}"
-    tokenizer = MarianTokenizer.from_pretrained(model_name)
-    model = MarianMTModel.from_pretrained(model_name)
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    outputs = model.generate(**inputs)
-    translated = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-    return translated[0]
+def translate_text(text, target_lang="FR"):
+   result = translator.translate_text(text, target_lang="FR")
+   return result.text
 
 # === 4. Synthétiser l’audio traduit ===
 def synthesize_speech_segment(text, lang="fr"):

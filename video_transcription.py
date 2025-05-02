@@ -1,16 +1,25 @@
 import os
 import glob
 import subprocess
+import creds
+import deepl
 from pathlib import Path
 import torch
-from transformers import pipeline, AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import pipeline
 from faster_whisper import WhisperModel
+
+translator = deepl.Translator(creds.auth_key)
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Avoid warnings
 os.environ["USE_TORCH"] = "1"  # Force use of PyTorch
 os.environ["USE_TF"] = "0"  # Disable TensorFlow
 
-def get_video_files(directory="./"):
+video_dir = "./test"
+input_video = os.path.join(video_dir, "input.mp4")
+subtitle_file = os.path.join(video_dir, "subtitles.srt")
+output_video = os.path.join(video_dir, "output.mp4")
+
+def get_video_files(directory=video_dir):
     """Get all video files in the specified directory."""
     video_extensions = ["*.mp4", "*.mkv", "*.webm", "*.flv"]
     video_files = []
@@ -59,21 +68,27 @@ def format_timestamp(seconds):
     return f"{hours:02d}:{minutes:02d}:{int(seconds):02d},{milliseconds:03d}"
 
 
-def translate_text(text, translator):
+def translate_text(text):
     """Translate text from English to Chinese."""
     if not text.strip():
         return ""
 
-    translated = translator(text, max_length=512)
-    return translated[0]["translation_text"]
+    translated = translator.translate_text(text, target_lang="ZH")
+    return translated.text
+
+def put_subtitle_on_video(video_path, srt_path):
+    cmd = [
+    "ffmpeg",
+    "-i", video_path,
+    "-vf", f"subtitles={srt_path}:force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF&'",
+    "-c:a", "copy",  # Keep original audio
+    output_video
+    ]
+    subprocess.run(cmd, check=True)
+    print("Subtitles burned successfully!")
+
 
 def main():
-    # Load translation model
-    print("Loading translation model...")
-    model_name = "Helsinki-NLP/opus-mt-en-zh"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    translator = pipeline("translation", model=model, tokenizer=tokenizer)
 
     video_files = get_video_files()
 
@@ -101,11 +116,11 @@ def main():
                 english_text = parts[2]
 
                 # Translate to Chinese
-                chinese_translation = translate_text(english_text, translator)
+                chinese_translation = translate_text(english_text)
 
                 # Combine English and Chinese
                 combined_text = (
-                    f"{english_text}\n{chinese_translation}"
+                    f"{chinese_translation}"
                     if chinese_translation
                     else english_text
                 )
@@ -119,9 +134,8 @@ def main():
             f.writelines(translated_srt)
 
         print(f"Subtitles with translation saved to {srt_path}")
-
+        put_subtitle_on_video(video_path, srt_path)
 
 if __name__ == "__main__":
     main()
 
-    
