@@ -1,7 +1,7 @@
 # Requirements
 
 ## Python
-Download & Install
+Download & Install python3.12
     
    [Python Official Website](https://www.python.org/downloads/)
         
@@ -48,7 +48,9 @@ Installation:
             
    **Windows**: Download from  [FFmpeg Official Site](https://ffmpeg.org/download.html)  and add to  `PATH`.
 
-   puis "pip install ffmpeg-python"
+# Other requirements
+
+      pip install ffmpeg-python sentencepiece sacremoses streamlit
 
 
 
