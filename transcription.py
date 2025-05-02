@@ -14,23 +14,11 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"  # Avoid warnings
 os.environ["USE_TORCH"] = "1"  # Force use of PyTorch
 os.environ["USE_TF"] = "0"  # Disable TensorFlow
 
-video_dir = "./test"
-input_video = os.path.join(video_dir, "input.mp4")
-subtitle_file = os.path.join(video_dir, "subtitles.srt")
+video_dir = os.getcwd()  # Get current working directory
 output_video = os.path.join(video_dir, "output.mp4")
 
-def get_video_files(directory=video_dir):
-    """Get all video files in the specified directory."""
-    video_extensions = ["*.mp4", "*.mkv", "*.webm", "*.flv"]
-    video_files = []
-
-    for ext in video_extensions:
-        video_files.extend(glob.glob(os.path.join(directory, ext)))
-
-    return video_files
 
 def transcribe_video(video_path):
-    """Transcribe video using Whisper model."""
     print(f"Transcribing {video_path}...")
 
     # Using faster-whisper for better performance
@@ -68,12 +56,11 @@ def format_timestamp(seconds):
     return f"{hours:02d}:{minutes:02d}:{int(seconds):02d},{milliseconds:03d}"
 
 
-def translate_text(text):
-    """Translate text from English to Chinese."""
+def translate_text(text,target_lang):
     if not text.strip():
         return ""
 
-    translated = translator.translate_text(text, target_lang="ZH")
+    translated = translator.translate_text(text, target_lang=target_lang)
     return translated.text
 
 def put_subtitle_on_video(video_path, srt_path):
@@ -87,55 +74,39 @@ def put_subtitle_on_video(video_path, srt_path):
     subprocess.run(cmd, check=True)
     print("Subtitles burned successfully!")
 
+def essai(video_path,selected_lang):
+    
+    video_filename = Path(video_path).stem
+    srt_path = f"{video_filename}.srt"
 
-def main():
+    transcribe_video(video_path)
+    srt_content = transcribe_video(video_path)
 
-    video_files = get_video_files()
+    print(f"Translating subtitles for {video_path}...")
+    translated_srt = []
+    for line in srt_content:
+        parts = line.strip().split("\n")
+        if len(parts) >= 3:  # Valid subtitle entry
+            subtitle_index = parts[0]
+            timestamp = parts[1]
+            text = parts[2]
 
-    if not video_files:
-        print("No video files found in the current directory.")
-        return
+            # Translate to the target language
+            translation = translate_text(text,selected_lang)
 
-    print(f"Found {len(video_files)} video file(s).")
+            combined_text = (
+                f"{translation}"
+                if translation
+                else text
+            )
 
-    for video_path in video_files:
-        video_filename = Path(video_path).stem
-        srt_path = f"{video_filename}.srt"
+            translated_srt.append(
+                f"{subtitle_index}\n{timestamp}\n{combined_text}\n\n"
+            )
 
-        # Transcribe video
-        srt_content = transcribe_video(video_path)
+    # Write to SRT file
+    with open(srt_path, "w", encoding="utf-8") as f:
+        f.writelines(translated_srt)
 
-        # Translate each subtitle line
-        print(f"Translating subtitles for {video_path}...")
-        translated_srt = []
-        for line in srt_content:
-            parts = line.strip().split("\n")
-            if len(parts) >= 3:  # Valid subtitle entry
-                subtitle_index = parts[0]
-                timestamp = parts[1]
-                english_text = parts[2]
-
-                # Translate to Chinese
-                chinese_translation = translate_text(english_text)
-
-                # Combine English and Chinese
-                combined_text = (
-                    f"{chinese_translation}"
-                    if chinese_translation
-                    else english_text
-                )
-
-                translated_srt.append(
-                    f"{subtitle_index}\n{timestamp}\n{combined_text}\n\n"
-                )
-
-        # Write to SRT file
-        with open(srt_path, "w", encoding="utf-8") as f:
-            f.writelines(translated_srt)
-
-        print(f"Subtitles with translation saved to {srt_path}")
-        put_subtitle_on_video(video_path, srt_path)
-
-if __name__ == "__main__":
-    main()
-
+    print(f"Subtitles with translation saved to {srt_path}")
+    put_subtitle_on_video(video_path, srt_path)

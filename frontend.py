@@ -2,6 +2,13 @@ import streamlit as st
 import transcription
 import os
 from pathlib import Path
+import asyncio
+
+# Fix for "RuntimeError: no running event loop"
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
 # Set page config
 st.set_page_config(page_title="Video Subtitle Viewer", layout="wide")
@@ -37,6 +44,7 @@ def main():
         temp_dir.mkdir(exist_ok=True)
         
         original_path = temp_dir / "original.mp4"
+        print(original_path)
         with open(original_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
@@ -94,10 +102,10 @@ def main():
             st.subheader(f"Video with {selected_lang} Subtitles")
             
             # Placeholder - replace with your actual subtitle video path
-            subtitle_video_path = temp_dir / languages[selected_lang]
-            
+            transcription.essai(original_path,languages[selected_lang])
+                        
             # For demo, we'll just show the original again
-            st.video(str(original_path))
+            st.video("output.mp4")
             
             # Download button would use your actual subtitle video
             with open(original_path, "rb") as f:
