@@ -43,7 +43,10 @@ def translate_text(text, src_lang="en", tgt_lang="fr"):
 
 # === 4. Synthétiser l’audio traduit ===
 def synthesize_speech_segment(text, lang="fr"):
-    tts = gTTS(text=text, lang=lang)
+    lang_gtts = lang
+    if lang == "zh":
+        lang_gtts = "zh-CN" 
+    tts = gTTS(text=text, lang=lang_gtts)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_mp3:
         tts.save(tmp_mp3.name)
         audio = AudioSegment.from_mp3(tmp_mp3.name)
@@ -63,7 +66,7 @@ def combine_audio_video(original_video_path, new_audio_path, output_path):
     ]
     subprocess.run(command, check=True)
 
-def process_video(input_video_path, output_video_path, st=None, status_placeholder=None):
+def process_video(input_video_path, output_video_path, st=None, status_placeholder=None, tgt_lang="fr"):
     if st and status_placeholder:
         status_placeholder.info("Extraction de l'audio de la vidéo...")
     extract_audio(input_video_path, EXTRACTED_AUDIO)
@@ -80,10 +83,10 @@ def process_video(input_video_path, output_video_path, st=None, status_placehold
     current_time_ms = 0
     for seg in segments:
         status_placeholder.info("Traduction du texte [{}/{}]...".format(i, nb_segments))
-        i+=1
-        translated = translate_text(seg["text"])
+        i += 1
+        translated = translate_text(seg["text"], tgt_lang=tgt_lang)
         translated_segments.append(translated)
-        audio = synthesize_speech_segment(translated)
+        audio = synthesize_speech_segment(translated, lang=tgt_lang)
         seg_start_ms = int(seg["start"] * 1000)
         seg_end_ms = int(seg["end"] * 1000)
         target_duration_ms = seg_end_ms - seg_start_ms
@@ -121,6 +124,21 @@ st.title("🎬 Traducteur de Vidéo Automatique")
 
 uploaded_file = st.file_uploader("Télécharge ta vidéo à traduire (format mp4)", type=["mp4"])
 
+# Ajout d'une sélection de langue cible compatible avec MarianMT et gTTS
+LANGUAGES = {
+    "Français": "fr",
+    "Anglais": "en",
+    "Chinois (simplifié)": "zh",
+    "Espagnol": "es",
+    "Allemand": "de",
+    "Italien": "it",
+    "Néerlandais": "nl",
+    "Portugais": "pt",
+    "Russe": "ru"
+}
+tgt_lang_label = st.selectbox("Choisis la langue de traduction :", list(LANGUAGES.keys()), index=0)
+tgt_lang = LANGUAGES[tgt_lang_label]
+
 if uploaded_file is not None:
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_input:
         tmp_input.write(uploaded_file.read())
@@ -130,7 +148,13 @@ if uploaded_file is not None:
     if st.button("Traduire la vidéo"):
         status_placeholder = st.empty()
         output_path = tmp_input_path.replace(".mp4", "_translated.mp4")
-        process_video(tmp_input_path, output_path, st=st, status_placeholder=status_placeholder)
+        process_video(
+            tmp_input_path,
+            output_path,
+            st=st,
+            status_placeholder=status_placeholder,
+            tgt_lang=tgt_lang
+        )
         status_placeholder.success("✅ Traduction terminée !")
         with open(output_path, "rb") as f:
             st.download_button(
