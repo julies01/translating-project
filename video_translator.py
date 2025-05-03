@@ -67,23 +67,42 @@ def combine_audio_video(original_video_path, new_audio_path, output_path):
     subprocess.run(command, check=True)
 
 def process_video(input_video_path, output_video_path, st=None, status_placeholder=None, tgt_lang="fr"):
-    if st and status_placeholder:
-        status_placeholder.info("Extraction de l'audio de la vidéo...")
-    extract_audio(input_video_path, EXTRACTED_AUDIO)
+    total_steps = 4
+    progress = 0
 
+    def update_progress(val):
+        if st and progress_bar:
+            progress_bar.progress(val)
+
+    progress_bar = st.progress(0) if st else None
+
+    # 1. Extraction
     if st and status_placeholder:
-        status_placeholder.info("Transcription de l'audio...")
+        status_placeholder.text("Extraction de l'audio de la vidéo ...")
+    extract_audio(input_video_path, EXTRACTED_AUDIO)
+    progress += 1
+    update_progress(progress / total_steps)
+
+    # 2. Transcription
+    if st and status_placeholder:
+        status_placeholder.text("Transcription de l'audio ...")
     segments = transcribe_audio(EXTRACTED_AUDIO)
-    i = 0
+    progress += 1
+    update_progress(progress / total_steps)
+
     nb_segments = len(segments)
-    if st and status_placeholder:
-        status_placeholder.info("Traduction du texte [{}/{}]...".format(i, nb_segments))
     translated_segments = []
     audio_segments = []
     current_time_ms = 0
-    for seg in segments:
-        status_placeholder.info("Traduction du texte [{}/{}]...".format(i, nb_segments))
-        i += 1
+
+    # 3. Traduction + Synthèse (progression par segment)
+    if st and status_placeholder:
+        status_placeholder.text("Traduction et synthèse audio ...")
+    for i, seg in enumerate(segments):
+        if st and status_placeholder:
+            status_placeholder.text(f"Traduction et synthèse vocal [{i+1}/{nb_segments}] ...")
+        
+        update_progress((progress + (i + 1) / nb_segments) / total_steps)
         translated = translate_text(seg["text"], tgt_lang=tgt_lang)
         translated_segments.append(translated)
         audio = synthesize_speech_segment(translated, lang=tgt_lang)
@@ -104,27 +123,33 @@ def process_video(input_video_path, output_video_path, st=None, status_placehold
         audio_segments.append(audio)
         current_time_ms += target_duration_ms
 
+    progress += 1
+    update_progress(progress / total_steps)
+
+    # 4. Génération de l'audio final et fusion
     if st and status_placeholder:
-        status_placeholder.info("Génération de l'audio traduit...")
+        status_placeholder.text("Génération de l'audio traduit ...")
     final_audio = sum(audio_segments)
     final_audio.export(TRANSLATED_AUDIO, format="wav")
 
     if st and status_placeholder:
-        status_placeholder.info("Fusion audio/vidéo…")
+        status_placeholder.text("Fusion audio/vidéo ...")
     combine_audio_video(input_video_path, TRANSLATED_AUDIO, output_video_path)
+    progress += 1
+    update_progress(progress / total_steps)
 
     # Nettoyage
     if os.path.exists(EXTRACTED_AUDIO):
         os.remove(EXTRACTED_AUDIO)
     if os.path.exists(TRANSLATED_AUDIO):
         os.remove(TRANSLATED_AUDIO)
+    progress_bar.empty()
 
 # === Interface Streamlit ===
 st.title("🎬 Traducteur de Vidéo Automatique")
 
 uploaded_file = st.file_uploader("Télécharge ta vidéo à traduire (format mp4)", type=["mp4"])
 
-# Ajout d'une sélection de langue cible compatible avec MarianMT et gTTS
 LANGUAGES = {
     "Français": "fr",
     "Anglais": "en",
