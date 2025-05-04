@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 import streamlit as st
 import ffmpeg
+import re
+import requests
 
 INPUT_VIDEO = "input.mp4"
 EXTRACTED_AUDIO = "audio.wav"
@@ -23,23 +25,58 @@ def transcribe_audio(audio_path):
     model = whisper.load_model("small")
     result = model.transcribe(audio_path)
     segments = []
-    for seg in result["segments"]:
+    text = ""
+    for idx, seg in enumerate(result["segments"], 1):
+        line = f"[{idx}] {seg['text']}"
+        text += line + "\n"
         segments.append({
             "start": seg["start"],
             "end": seg["end"],
             "text": seg["text"]
         })
-    return segments
+    return segments, text.strip()
 
-# === 3. Traduire le texte ===
-def translate_text(text, src_lang="en", tgt_lang="fr"):
-    model_name = f"Helsinki-NLP/opus-mt-{src_lang}-{tgt_lang}"
-    tokenizer = MarianTokenizer.from_pretrained(model_name)
-    model = MarianMTModel.from_pretrained(model_name)
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True)
-    outputs = model.generate(**inputs)
-    translated = tokenizer.batch_decode(outputs, skip_special_tokens=True)
-    return translated[0]
+# === 3. Traduire le texte via Ollama Qwen3:8b ===
+def translate_text_ollama(formatted_text, src_lang="en", tgt_lang="fr"):
+    prompt = (
+        f"Traduis le texte suivant de {src_lang} vers {tgt_lang}. "
+        "Pour chaque ligne, commence par le même numéro entre crochets suivi du texte traduit. "
+        "Exemple : [1] Bonjour.\n\n"
+        f"{formatted_text}"
+    )
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={
+            "model": "qwen3:8b",
+            "prompt": prompt,
+            "stream": False
+        }
+    )
+    response.raise_for_status()
+    translated = response.json()["response"].strip()
+    # Supprimer le bloc <think>...</think> s'il existe
+    translated = re.sub(r"<think>.*?</think>", "", translated, flags=re.DOTALL).strip()
+    return translated
+
+# === 3b. Recréer les segments à partir du texte traduit ===
+def parse_translated_segments(translated_text, original_segments):
+    lines = translated_text.strip().splitlines()
+    segments = []
+    line_re = re.compile(r"\[(\d+)\]\s*(.*)")
+    for line in lines:
+        m = line_re.match(line)
+        if not m:
+            continue
+        idx, text = m.groups()
+        idx = int(idx) - 1
+        if 0 <= idx < len(original_segments):
+            seg = original_segments[idx]
+            segments.append({
+                "start": seg["start"],
+                "end": seg["end"],
+                "text": text.strip()
+            })
+    return segments
 
 # === 4. Synthétiser l’audio traduit ===
 def synthesize_speech_segment(text, lang="fr"):
@@ -86,26 +123,28 @@ def process_video(input_video_path, output_video_path, st=None, status_placehold
     # 2. Transcription
     if st and status_placeholder:
         status_placeholder.text("Transcription de l'audio ...")
-    segments = transcribe_audio(EXTRACTED_AUDIO)
+    original_segments, formatted_text = transcribe_audio(EXTRACTED_AUDIO)
     progress += 1
     update_progress(progress / total_steps)
 
-    nb_segments = len(segments)
-    translated_segments = []
+    # 3. Traduction via Ollama
+    if st and status_placeholder:
+        status_placeholder.text("Traduction du texte ...")
+    translated_text = translate_text_ollama(formatted_text, src_lang="en", tgt_lang=tgt_lang)
+    translated_segments = parse_translated_segments(translated_text, original_segments)
+
+    nb_segments = len(translated_segments)
     audio_segments = []
     current_time_ms = 0
 
-    # 3. Traduction + Synthèse (progression par segment)
+    # 4. Synthèse audio segmentée
     if st and status_placeholder:
-        status_placeholder.text("Traduction et synthèse audio ...")
-    for i, seg in enumerate(segments):
+        status_placeholder.text("Synthèse audio ...")
+    for i, seg in enumerate(translated_segments):
         if st and status_placeholder:
-            status_placeholder.text(f"Traduction et synthèse vocal [{i+1}/{nb_segments}] ...")
-        
+            status_placeholder.text(f"Synthèse vocale [{i+1}/{nb_segments}] ...")
         update_progress((progress + (i + 1) / nb_segments) / total_steps)
-        translated = translate_text(seg["text"], tgt_lang=tgt_lang)
-        translated_segments.append(translated)
-        audio = synthesize_speech_segment(translated, lang=tgt_lang)
+        audio = synthesize_speech_segment(seg["text"], lang=tgt_lang)
         seg_start_ms = int(seg["start"] * 1000)
         seg_end_ms = int(seg["end"] * 1000)
         target_duration_ms = seg_end_ms - seg_start_ms
@@ -126,7 +165,7 @@ def process_video(input_video_path, output_video_path, st=None, status_placehold
     progress += 1
     update_progress(progress / total_steps)
 
-    # 4. Génération de l'audio final et fusion
+    # 5. Génération de l'audio final et fusion
     if st and status_placeholder:
         status_placeholder.text("Génération de l'audio traduit ...")
     final_audio = sum(audio_segments)
