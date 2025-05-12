@@ -42,7 +42,7 @@ def translate_text_ollama(formatted_text, src_lang="en", tgt_lang="fr"):
         f"Traduis le texte suivant de {src_lang} vers {tgt_lang}. "
         "Pour chaque ligne, commence par le même numéro entre crochets suivi du texte traduit. "
         "Exemple : [1] Bonjour.\n\n"
-        f"{formatted_text}"
+        f"{formatted_text} /no_think"
     )
     response = requests.post(
         "http://localhost:11434/api/generate",
