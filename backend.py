@@ -108,17 +108,37 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
     progress += 1
     update_progress(progress / total_steps)
 
-    # 2. Transcription
+    # 2. Détection de la langue et transcription
     if status_callback:
-        status_callback("Transcription de l'audio ...")
-    original_segments, formatted_text = transcribe_audio(EXTRACTED_AUDIO)
+        status_callback("Détection de la langue et transcription ...")
+    model = whisper.load_model("small")
+    # Détection de la langue
+    audio = whisper.load_audio(EXTRACTED_AUDIO)
+    audio = whisper.pad_or_trim(audio)
+    mel = whisper.log_mel_spectrogram(audio).to(model.device)
+    _, probs = model.detect_language(mel)
+    src_lang = max(probs, key=probs.get)
+    if status_callback:
+        status_callback(f"Langue détectée : {src_lang}")
+    # Transcription
+    result = model.transcribe(EXTRACTED_AUDIO)
+    original_segments = []
+    formatted_text = ""
+    for idx, seg in enumerate(result["segments"], 1):
+        line = f"[{idx}] {seg['text']}"
+        formatted_text += line + "\n"
+        original_segments.append({
+            "start": seg["start"],
+            "end": seg["end"],
+            "text": seg["text"]
+        })
     progress += 1
     update_progress(progress / total_steps)
 
     # 3. Traduction via Ollama
     if status_callback:
         status_callback("Traduction du texte ...")
-    translated_text = translate_text_ollama(formatted_text, src_lang="en", tgt_lang=tgt_lang)
+    translated_text = translate_text_ollama(formatted_text, src_lang=src_lang, tgt_lang=tgt_lang)
     translated_segments = parse_translated_segments(translated_text, original_segments)
 
     nb_segments = len(translated_segments)
