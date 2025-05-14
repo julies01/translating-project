@@ -23,16 +23,21 @@ def transcribe_video(video_path):
 
     # Using faster-whisper for better performance
     model_size = "medium"
-    # Run on GPU if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
     compute_type = "float16" if torch.cuda.is_available() else "int8"
 
     # Load the Whisper model
     model = WhisperModel(model_size, device=device, compute_type=compute_type)
 
-    # Transcribe the audio
+    # First, detect language by running with language=None
+    _, info = model.transcribe(
+        video_path, language=None, task="transcribe", vad_filter=True
+    )
+    print(f"Detected language: {info.language}")
+
+    # Now, transcribe with the detected language code
     segments, _ = model.transcribe(
-        video_path, language="en", task="transcribe", vad_filter=True
+        video_path, language=info.language, task="transcribe", vad_filter=True
     )
 
     # Format as SRT
@@ -74,39 +79,30 @@ def put_subtitle_on_video(video_path, srt_path):
     subprocess.run(cmd, check=True)
     print("Subtitles burned successfully!")
 
-def essai(video_path,selected_lang):
-    
+def essai(video_path, selected_lang):
     video_filename = Path(video_path).stem
     srt_path = f"{video_filename}.srt"
+    native_srt_path = f"{video_filename}_native.srt"
 
-    transcribe_video(video_path)
     srt_content = transcribe_video(video_path)
-
     print(f"Translating subtitles for {video_path}...")
+
+    with open(native_srt_path, "w", encoding="utf-8") as f:
+        f.writelines(srt_content)
+
+    # Translate only the subtitle text lines, keep timestamps and numbering
     translated_srt = []
     for line in srt_content:
-        parts = line.strip().split("\n")
-        if len(parts) >= 3:  # Valid subtitle entry
-            subtitle_index = parts[0]
-            timestamp = parts[1]
-            text = parts[2]
-
-            # Translate to the target language
-            translation = translate_text(text,selected_lang)
-
-            combined_text = (
-                f"{translation}"
-                if translation
-                else text
-            )
-
-            translated_srt.append(
-                f"{subtitle_index}\n{timestamp}\n{combined_text}\n\n"
-            )
-
-    # Write to SRT file
+        parts = line.split('\n')
+        if len(parts) >= 3:
+            # parts[2] is the subtitle text
+            translated_text = translate_text(parts[2], selected_lang)
+            parts[2] = translated_text
+            translated_srt.append('\n'.join(parts) + '\n')
+        else:
+            translated_srt.append(line)
+    
     with open(srt_path, "w", encoding="utf-8") as f:
         f.writelines(translated_srt)
 
-    print(f"Subtitles with translation saved to {srt_path}")
     put_subtitle_on_video(video_path, srt_path)

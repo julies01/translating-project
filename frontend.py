@@ -1,14 +1,20 @@
-import streamlit as st
-import transcription
 import os
-from pathlib import Path
+os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
+import time
+import sys
 import asyncio
 
-# Fix for "RuntimeError: no running event loop"
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
+if sys.version_info >= (3, 12):
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+import streamlit as st
+import transcription
+from pathlib import Path
+
 
 # Set page config
 st.set_page_config(page_title="Video Subtitle Viewer", layout="wide")
@@ -104,17 +110,23 @@ def main():
             # Placeholder - replace with your actual subtitle video path
             transcription.essai(original_path,languages[selected_lang])
                         
-            # For demo, we'll just show the original again
-            st.video("output.mp4")
+            output_path = "output.mp4"
+            timeout = 120  # secondes
+            waited = 0
+            while not os.path.exists(output_path) and waited < timeout:
+                time.sleep(1)
+                waited += 1
             
             # Download button would use your actual subtitle video
-            with open(original_path, "rb") as f:
-                st.download_button(
-                    label=f"Download {selected_lang} Version",
-                    data=f,
-                    file_name=languages[selected_lang],
-                    mime="video/mp4"
-                )
+            if os.path.exists(output_path):
+                st.video(output_path)
+                with open(original_path, "rb") as f:
+                    st.download_button(
+                        label=f"Download {selected_lang} Version",
+                        data=f,
+                        file_name=languages[selected_lang],
+                        mime="video/mp4"
+                    )
 
         # Clean up
         if st.button("Clear Files"):

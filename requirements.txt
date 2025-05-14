@@ -1,0 +1,10 @@
+# Core requirements
+torch
+transformers
+faster-whisper
+
+# Additional dependencies that might be needed
+soundfile  # Often required for audio processing
+librosa  # Common audio processing library
+numpy  # Required by many ML libraries
+tqdm  # Progress bars often used in ML pipelines
