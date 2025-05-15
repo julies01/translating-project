@@ -1,5 +1,5 @@
 import os
-import whisper
+import whisperx
 from gtts import gTTS
 from pydub import AudioSegment
 import subprocess
@@ -7,6 +7,10 @@ import tempfile
 import ffmpeg
 import re
 import requests
+import torch
+import librosa
+import soundfile as sf
+import numpy as np
 
 INPUT_VIDEO = "input.mp4"
 EXTRACTED_AUDIO = "audio.wav"
@@ -16,12 +20,15 @@ OUTPUT_VIDEO = "translated_video.mp4"
 def extract_audio(video_path, audio_path):
     ffmpeg.input(video_path).output(audio_path, acodec='pcm_s16le', ac=1, ar='16k').run(overwrite_output=True)
 
-def transcribe_audio(audio_path):
-    model = whisper.load_model("small")
+def transcribe_audio(audio_path, device="cpu", model_size="small"):
+    model = whisperx.load_model(model_size, device, compute_type="float32")
     result = model.transcribe(audio_path)
+    # Alignement pour des timestamps plus précis
+    align_model, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
+    result_aligned = whisperx.align(result["segments"], align_model, metadata, audio_path, device)
     segments = []
     text = ""
-    for idx, seg in enumerate(result["segments"], 1):
+    for idx, seg in enumerate(result_aligned["segments"], 1):
         line = f"[{idx}] {seg['text']}"
         text += line + "\n"
         segments.append({
@@ -29,7 +36,8 @@ def transcribe_audio(audio_path):
             "end": seg["end"],
             "text": seg["text"]
         })
-    return segments, text.strip()
+    src_lang = result.get("language", "en")
+    return segments, text.strip(), src_lang
 
 def translate_text_ollama(formatted_text, src_lang="en", tgt_lang="fr"):
     prompt = (
@@ -69,6 +77,33 @@ def parse_translated_segments(translated_text, original_segments):
                 "text": text.strip()
             })
     return segments
+
+def time_stretch_to_duration(audio_segment, target_duration_ms):
+    samples = np.array(audio_segment.get_array_of_samples())
+    if audio_segment.channels > 1:
+        samples = samples.reshape((-1, audio_segment.channels))
+        y = samples.mean(axis=1).astype(np.float32) / 32768.0  # conversion mono
+    else:
+        y = samples.astype(np.float32) / 32768.0
+    sr = audio_segment.frame_rate
+    current_duration = len(audio_segment) / 1000.0
+    target_duration = target_duration_ms / 1000.0
+    if current_duration == 0 or abs(current_duration - target_duration) < 0.01:
+        return audio_segment
+    rate = current_duration / target_duration
+
+    hop_length = 512  # valeur par défaut de librosa.stft
+    D = librosa.stft(y, hop_length=hop_length)
+    D_stretch = librosa.phase_vocoder(D, rate=rate, hop_length=hop_length)
+    y_stretch = librosa.istft(D_stretch, hop_length=hop_length)
+
+    # Convertit numpy array en AudioSegment
+    tmp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    sf.write(tmp_wav.name, y_stretch, sr)
+    stretched = AudioSegment.from_wav(tmp_wav.name)
+    tmp_wav.close()
+    os.remove(tmp_wav.name)
+    return stretched
 
 def synthesize_speech_segment(text, lang="fr"):
     lang_gtts = lang
@@ -111,29 +146,12 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
     # 2. Détection de la langue et transcription
     if status_callback:
         status_callback("Détection de la langue et transcription ...")
-    model = whisper.load_model("small")
-    # Détection de la langue
-    audio = whisper.load_audio(EXTRACTED_AUDIO)
-    audio = whisper.pad_or_trim(audio)
-    mel = whisper.log_mel_spectrogram(audio).to(model.device)
-    _, probs = model.detect_language(mel)
-    src_lang = max(probs, key=probs.get)
-    if status_callback:
-        status_callback(f"Langue détectée : {src_lang}")
-    # Transcription
-    result = model.transcribe(EXTRACTED_AUDIO)
-    original_segments = []
-    formatted_text = ""
-    for idx, seg in enumerate(result["segments"], 1):
-        line = f"[{idx}] {seg['text']}"
-        formatted_text += line + "\n"
-        original_segments.append({
-            "start": seg["start"],
-            "end": seg["end"],
-            "text": seg["text"]
-        })
+    segments, formatted_text, src_lang = transcribe_audio(EXTRACTED_AUDIO)
     progress += 1
     update_progress(progress / total_steps)
+    if status_callback:
+        status_callback(f"Langue détectée : {src_lang}")
+    original_segments = segments
 
     # 3. Traduction via Ollama
     if status_callback:
@@ -157,15 +175,20 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
         seg_end_ms = int(seg["end"] * 1000)
         target_duration_ms = seg_end_ms - seg_start_ms
 
-        if seg_start_ms > current_time_ms:
-            silence = AudioSegment.silent(duration=seg_start_ms - current_time_ms)
-            audio_segments.append(silence)
-            current_time_ms = seg_start_ms
+        # Ajustement automatique de la vitesse pour coller à la durée cible
+        if len(audio) > 0 and abs(len(audio) - target_duration_ms) > 30:
+            audio = time_stretch_to_duration(audio, target_duration_ms)
 
+        # Découpe ou ajoute du silence si besoin (sécurité)
         if len(audio) < target_duration_ms:
             audio += AudioSegment.silent(duration=target_duration_ms - len(audio))
         else:
             audio = audio[:target_duration_ms]
+
+        if seg_start_ms > current_time_ms:
+            silence = AudioSegment.silent(duration=seg_start_ms - current_time_ms)
+            audio_segments.append(silence)
+            current_time_ms = seg_start_ms
 
         audio_segments.append(audio)
         current_time_ms += target_duration_ms
