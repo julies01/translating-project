@@ -7,7 +7,6 @@ import tempfile
 import ffmpeg
 import re
 import requests
-import torch
 import librosa
 import soundfile as sf
 import numpy as np
@@ -20,10 +19,10 @@ OUTPUT_VIDEO = "translated_video.mp4"
 def extract_audio(video_path, audio_path):
     ffmpeg.input(video_path).output(audio_path, acodec='pcm_s16le', ac=1, ar='16k').run(overwrite_output=True)
 
-def transcribe_audio(audio_path, device="cpu", model_size="small"):
+def transcribe_audio(audio_path, device="cpu", model_size="turbo"):
     model = whisperx.load_model(model_size, device, compute_type="float32")
     result = model.transcribe(audio_path)
-    # Alignement pour des timestamps plus précis
+
     align_model, metadata = whisperx.load_align_model(language_code=result["language"], device=device)
     result_aligned = whisperx.align(result["segments"], align_model, metadata, audio_path, device)
     segments = []
@@ -82,7 +81,7 @@ def time_stretch_to_duration(audio_segment, target_duration_ms):
     samples = np.array(audio_segment.get_array_of_samples())
     if audio_segment.channels > 1:
         samples = samples.reshape((-1, audio_segment.channels))
-        y = samples.mean(axis=1).astype(np.float32) / 32768.0  # conversion mono
+        y = samples.mean(axis=1).astype(np.float32) / 32768.0
     else:
         y = samples.astype(np.float32) / 32768.0
     sr = audio_segment.frame_rate
@@ -92,12 +91,11 @@ def time_stretch_to_duration(audio_segment, target_duration_ms):
         return audio_segment
     rate = current_duration / target_duration
 
-    hop_length = 512  # valeur par défaut de librosa.stft
+    hop_length = 512
     D = librosa.stft(y, hop_length=hop_length)
     D_stretch = librosa.phase_vocoder(D, rate=rate, hop_length=hop_length)
     y_stretch = librosa.istft(D_stretch, hop_length=hop_length)
 
-    # Convertit numpy array en AudioSegment
     tmp_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     sf.write(tmp_wav.name, y_stretch, sr)
     stretched = AudioSegment.from_wav(tmp_wav.name)
@@ -175,11 +173,9 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
         seg_end_ms = int(seg["end"] * 1000)
         target_duration_ms = seg_end_ms - seg_start_ms
 
-        # Ajustement automatique de la vitesse pour coller à la durée cible
         if len(audio) > 0 and abs(len(audio) - target_duration_ms) > 30:
             audio = time_stretch_to_duration(audio, target_duration_ms)
 
-        # Découpe ou ajoute du silence si besoin (sécurité)
         if len(audio) < target_duration_ms:
             audio += AudioSegment.silent(duration=target_duration_ms - len(audio))
         else:
