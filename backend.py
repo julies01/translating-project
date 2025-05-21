@@ -116,6 +116,7 @@ def synthesize_speech_segment(text, lang="fr"):
 def combine_audio_video(original_video_path, new_audio_path, output_path):
     command = [
         'ffmpeg',
+        '-y',
         '-i', original_video_path,
         '-i', new_audio_path,
         '-c:v', 'copy',
@@ -126,11 +127,46 @@ def combine_audio_video(original_video_path, new_audio_path, output_path):
     ]
     subprocess.run(command, check=True)
 
-def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_callback=None, status_callback=None):
-    total_steps = 4
+def format_srt_timestamp(seconds):
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = int(seconds % 60)
+    milliseconds = int((seconds - int(seconds)) * 1000)
+    return f"{hours:02d}:{minutes:02d}:{secs:02d},{milliseconds:03d}"
+
+def generate_srt(segments, srt_path):
+    """Génère un fichier SRT à partir des segments."""
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, 1):
+            start = format_srt_timestamp(seg["start"])
+            end = format_srt_timestamp(seg["end"])
+            text = seg["text"].replace('\n', ' ')
+            f.write(f"{i}\n{start} --> {end}\n{text}\n\n")
+
+def burn_subtitles_on_video(video_path, srt_path, output_path):
+    """Incruste les sous-titres sur la vidéo avec ffmpeg."""
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i", video_path,
+        "-vf", f"subtitles={srt_path}:force_style='FontName=Arial,FontSize=20,PrimaryColour=&HFFFFFF&'",
+        "-c:a", "copy",
+        output_path
+    ]
+    subprocess.run(command, check=True)
+
+def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_callback=None, status_callback=None, translate_audio=True, add_subtitles=True,):
+
+    total_steps = 2
+    if translate_audio:
+        total_steps += 2
+    if add_subtitles:
+        total_steps += 1
+
     progress = 0
 
     def update_progress(val):
+        val = max(0.0, min(1.0, val))
         if progress_callback:
             progress_callback(val)
 
@@ -157,55 +193,81 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
     translated_text = translate_text_ollama(formatted_text, src_lang=src_lang, tgt_lang=tgt_lang)
     translated_segments = parse_translated_segments(translated_text, original_segments)
 
-    nb_segments = len(translated_segments)
-    audio_segments = []
-    current_time_ms = 0
-
     # 4. Synthèse audio segmentée
-    if status_callback:
-        status_callback("Synthèse audio ...")
-    for i, seg in enumerate(translated_segments):
+    if translate_audio:
+        nb_segments = len(translated_segments)
+        audio_segments = []
+        current_time_ms = 0
+
         if status_callback:
-            status_callback(f"Synthèse vocale [{i+1}/{nb_segments}] ...")
-        update_progress((progress + (i + 1) / nb_segments) / total_steps)
-        audio = synthesize_speech_segment(seg["text"], lang=tgt_lang)
-        seg_start_ms = int(seg["start"] * 1000)
-        seg_end_ms = int(seg["end"] * 1000)
-        target_duration_ms = seg_end_ms - seg_start_ms
+            status_callback("Synthèse audio ...")
+        for i, seg in enumerate(translated_segments):
+            if status_callback:
+                status_callback(f"Synthèse vocale [{i+1}/{nb_segments}] ...")
+            update_progress((progress + (i + 1) / nb_segments) / total_steps)
+            audio = synthesize_speech_segment(seg["text"], lang=tgt_lang)
+            seg_start_ms = int(seg["start"] * 1000)
+            seg_end_ms = int(seg["end"] * 1000)
+            target_duration_ms = seg_end_ms - seg_start_ms
 
-        if len(audio) > 0 and abs(len(audio) - target_duration_ms) > 30:
-            audio = time_stretch_to_duration(audio, target_duration_ms)
+            if len(audio) > 0 and abs(len(audio) - target_duration_ms) > 30:
+                audio = time_stretch_to_duration(audio, target_duration_ms)
 
-        if len(audio) < target_duration_ms:
-            audio += AudioSegment.silent(duration=target_duration_ms - len(audio))
-        else:
-            audio = audio[:target_duration_ms]
+            if len(audio) < target_duration_ms:
+                audio += AudioSegment.silent(duration=target_duration_ms - len(audio))
+            else:
+                audio = audio[:target_duration_ms]
 
-        if seg_start_ms > current_time_ms:
-            silence = AudioSegment.silent(duration=seg_start_ms - current_time_ms)
-            audio_segments.append(silence)
-            current_time_ms = seg_start_ms
+            if seg_start_ms > current_time_ms:
+                silence = AudioSegment.silent(duration=seg_start_ms - current_time_ms)
+                audio_segments.append(silence)
+                current_time_ms = seg_start_ms
 
-        audio_segments.append(audio)
-        current_time_ms += target_duration_ms
+            audio_segments.append(audio)
+            current_time_ms += target_duration_ms
 
-    progress += 1
-    update_progress(progress / total_steps)
+        progress += 1
+        update_progress(progress / total_steps)
 
-    # 5. Génération de l'audio final et fusion
-    if status_callback:
-        status_callback("Génération de l'audio traduit ...")
-    final_audio = sum(audio_segments)
-    final_audio.export(TRANSLATED_AUDIO, format="wav")
+        # Génération de l'audio final et fusion
+        if status_callback:
+            status_callback("Génération de l'audio traduit ...")
+        final_audio = sum(audio_segments)
+        final_audio.export(TRANSLATED_AUDIO, format="wav")
 
-    if status_callback:
-        status_callback("Fusion audio/vidéo ...")
-    combine_audio_video(input_video_path, TRANSLATED_AUDIO, output_video_path)
-    progress += 1
-    update_progress(progress / total_steps)
+        if status_callback:
+            status_callback("Fusion audio/vidéo ...")
+        combine_audio_video(input_video_path, TRANSLATED_AUDIO, output_video_path)
+        progress += 1
+        update_progress(progress / total_steps)
+        video_for_subs = output_video_path
+    else:
+        video_for_subs = input_video_path
 
-    # Nettoyage
-    if os.path.exists(EXTRACTED_AUDIO):
-        os.remove(EXTRACTED_AUDIO)
-    if os.path.exists(TRANSLATED_AUDIO):
-        os.remove(TRANSLATED_AUDIO)
+    # 5. Génération et incrustation des sous-titres (si demandé)
+    if add_subtitles:
+        srt_path = output_video_path.replace(".mp4", ".srt")
+        subtitled_video_path = output_video_path.replace(".mp4", "_subtitled.mp4")
+        if status_callback:
+            status_callback("Génération et incrustation des sous-titres ...")
+        generate_srt(translated_segments, srt_path)
+        burn_subtitles_on_video(video_for_subs, srt_path, subtitled_video_path)
+        progress += 1
+        update_progress(progress / total_steps)
+        if os.path.exists(EXTRACTED_AUDIO):
+            os.remove(EXTRACTED_AUDIO)
+        if os.path.exists(TRANSLATED_AUDIO):
+            os.remove(TRANSLATED_AUDIO)
+        if os.path.exists(output_video_path) and translate_audio:
+            os.remove(output_video_path)
+        if os.path.exists(srt_path):
+            os.remove(srt_path)
+        os.rename(subtitled_video_path, output_video_path)
+    else:
+        if os.path.exists(EXTRACTED_AUDIO):
+            os.remove(EXTRACTED_AUDIO)
+        if os.path.exists(TRANSLATED_AUDIO):
+            os.remove(TRANSLATED_AUDIO)
+        if not translate_audio and output_video_path != input_video_path:
+            import shutil
+            shutil.copy(input_video_path, output_video_path)
