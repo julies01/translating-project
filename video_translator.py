@@ -9,6 +9,9 @@ from transformers import MarianMTModel, MarianTokenizer
 import subprocess
 from pydub import AudioSegment
 import tempfile
+import warnings
+
+warnings.filterwarnings("ignore", message="std(): degrees of freedom is <= 0")
 
 INPUT_VIDEO = "videos/input.mp4"
 EXTRACTED_AUDIO = "audio.wav"

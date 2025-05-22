@@ -24,12 +24,9 @@ jobs:
         
     - name: Run tests
       run: |
-        # Run pytest (or your test command)
-        pytest tests/
-        # Alternative if using unittest:
-        # python -m unittest discover -s tests
-
-      - name: Notify on failure
+        pytest
+      
+    - name: Notify on failure
       if: failure()
       run: |
         echo "Tests failed! Check the workflow run for details."

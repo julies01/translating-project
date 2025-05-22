@@ -12,7 +12,7 @@ if sys.version_info >= (3, 12):
         asyncio.set_event_loop(loop)
 
 import streamlit as st
-import transcription
+import transcription as tr
 from pathlib import Path
 
 
@@ -46,7 +46,7 @@ def main():
 
     if uploaded_file:
         # Save uploaded file temporarily
-        temp_dir = Path("temp_videos")
+        temp_dir = Path("temp_files")
         temp_dir.mkdir(exist_ok=True)
         
         original_path = temp_dir / "original.mp4"
@@ -104,11 +104,15 @@ def main():
 
         # Display button
         if st.button("Show Subtitled Version"):
-            # In your actual app, replace this with loading your pre-made subtitle video
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+           
+            def progress_callback(progress, message):
+                progress_bar.progress(progress)
+                status_text.info(message)
+
+            tr.main(original_path,languages[selected_lang],progress_callback=progress_callback)
             st.subheader(f"Video with {selected_lang} Subtitles")
-            
-            # Placeholder - replace with your actual subtitle video path
-            transcription.essai(original_path,languages[selected_lang])
                         
             output_path = "output.mp4"
             timeout = 120  # secondes

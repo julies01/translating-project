@@ -40,7 +40,10 @@ def transcribe_video(video_path):
         video_path, language=info.language, task="transcribe", vad_filter=True
     )
 
-    # Format as SRT
+    return formatting_as_SRT(segments)
+
+
+def formatting_as_SRT(segments):
     srt_content = []
     for i, segment in enumerate(segments, 1):
         start = format_timestamp(segment.start)
@@ -50,6 +53,7 @@ def transcribe_video(video_path):
         srt_content.append(f"{i}\n{start} --> {end}\n{text}\n")
 
     return srt_content
+
 
 def format_timestamp(seconds):
     """Convert seconds to SRT timestamp format."""
@@ -79,17 +83,8 @@ def put_subtitle_on_video(video_path, srt_path):
     subprocess.run(cmd, check=True)
     print("Subtitles burned successfully!")
 
-def essai(video_path, selected_lang):
-    video_filename = Path(video_path).stem
-    srt_path = f"{video_filename}.srt"
-    native_srt_path = f"{video_filename}_native.srt"
 
-    srt_content = transcribe_video(video_path)
-    print(f"Translating subtitles for {video_path}...")
-
-    with open(native_srt_path, "w", encoding="utf-8") as f:
-        f.writelines(srt_content)
-
+def translation_process(srt_content,selected_lang):
     # Translate only the subtitle text lines, keep timestamps and numbering
     translated_srt = []
     for line in srt_content:
@@ -101,8 +96,37 @@ def essai(video_path, selected_lang):
             translated_srt.append('\n'.join(parts) + '\n')
         else:
             translated_srt.append(line)
+
+    return translated_srt
+
+
+def main(video_path, selected_lang,progress_callback=None):
+    video_filename = Path(video_path).stem
+    srt_path = os.path.join(video_dir, f"{video_filename}.srt")
+    native_srt_path = os.path.join(video_dir, f"{video_filename}_native.srt")
+
+    if progress_callback:
+        progress_callback(0.1, "Transcription en cours...")
+    srt_content = transcribe_video(video_path)
+    print(f"Translating subtitles for {video_path}...")
+
+    if progress_callback:
+        progress_callback(0.3, "Génération du fichier SRT natif...")
+    with open(native_srt_path, "w", encoding="utf-8") as f:
+        f.writelines(srt_content)
+
+    if progress_callback:
+        progress_callback(0.5, "Traduction des sous-titres...")
+    translated_srt = translation_process(srt_content,selected_lang)
     
+    if progress_callback:
+        progress_callback(0.7, "Génération du fichier SRT traduit...")
     with open(srt_path, "w", encoding="utf-8") as f:
         f.writelines(translated_srt)
 
+    if progress_callback:
+        progress_callback(0.9, "Ajout des sous-titres à la vidéo...")
     put_subtitle_on_video(video_path, srt_path)
+
+    if progress_callback:
+        progress_callback(1.0, "Vidéo prête !")
