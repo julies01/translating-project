@@ -10,11 +10,9 @@ import requests
 import librosa
 import soundfile as sf
 import numpy as np
-
-INPUT_VIDEO = "input.mp4"
-EXTRACTED_AUDIO = "audio.wav"
-TRANSLATED_AUDIO = "translated_audio.wav"
-OUTPUT_VIDEO = "translated_video.mp4"
+import uuid
+from datetime import datetime
+import shutil
 
 def extract_audio(video_path, audio_path):
     ffmpeg.input(video_path).output(audio_path, acodec='pcm_s16le', ac=1, ar='16k').run(overwrite_output=True)
@@ -155,34 +153,44 @@ def burn_subtitles_on_video(video_path, srt_path, output_path):
     ]
     subprocess.run(command, check=True)
 
-def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_callback=None, status_callback=None, translate_audio=True, add_subtitles=True,):
+def process_video(
+    input_video_path,
+    output_video_path=None,
+    tgt_lang="fr",
+    progress_callback=None,
+    status_callback=None,
+    translate_audio=True,
+    add_subtitles=True,
+    save_dir=None
+):
+    # Création d'un dossier unique pour cette requête
+    if save_dir is None:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        save_dir = os.path.join("history", f"{timestamp}_{unique_id}")
+    os.makedirs(save_dir, exist_ok=True)
 
-    total_steps = 2
-    if translate_audio:
-        total_steps += 2
-    if add_subtitles:
-        total_steps += 1
+    # Copie la vidéo originale dans le dossier
+    original_video_path = os.path.join(save_dir, "original.mp4")
+    shutil.copy(input_video_path, original_video_path)
 
-    progress = 0
-
-    def update_progress(val):
-        val = max(0.0, min(1.0, val))
-        if progress_callback:
-            progress_callback(val)
+    # Chemins pour les fichiers temporaires dans le dossier
+    extracted_audio = os.path.join(save_dir, "audio.wav")
+    translated_audio = os.path.join(save_dir, "translated_audio.wav")
+    output_video = os.path.join(save_dir, "translated.mp4")
+    srt_path = os.path.join(save_dir, "translated.srt")
 
     # 1. Extraction
     if status_callback:
         status_callback("Extraction de l'audio de la vidéo ...")
-    extract_audio(input_video_path, EXTRACTED_AUDIO)
-    progress += 1
-    update_progress(progress / total_steps)
+    extract_audio(original_video_path, extracted_audio)
+    if progress_callback: progress_callback(0.1)
 
     # 2. Détection de la langue et transcription
     if status_callback:
         status_callback("Détection de la langue et transcription ...")
-    segments, formatted_text, src_lang = transcribe_audio(EXTRACTED_AUDIO)
-    progress += 1
-    update_progress(progress / total_steps)
+    segments, formatted_text, src_lang = transcribe_audio(extracted_audio)
+    if progress_callback: progress_callback(0.2)
     if status_callback:
         status_callback(f"Langue détectée : {src_lang}")
     original_segments = segments
@@ -204,7 +212,7 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
         for i, seg in enumerate(translated_segments):
             if status_callback:
                 status_callback(f"Synthèse vocale [{i+1}/{nb_segments}] ...")
-            update_progress((progress + (i + 1) / nb_segments) / total_steps)
+            if progress_callback: progress_callback(0.2 + 0.3 * (i+1)/nb_segments)
             audio = synthesize_speech_segment(seg["text"], lang=tgt_lang)
             seg_start_ms = int(seg["start"] * 1000)
             seg_end_ms = int(seg["end"] * 1000)
@@ -226,48 +234,37 @@ def process_video(input_video_path, output_video_path, tgt_lang="fr", progress_c
             audio_segments.append(audio)
             current_time_ms += target_duration_ms
 
-        progress += 1
-        update_progress(progress / total_steps)
+        if progress_callback: progress_callback(0.6)
 
         # Génération de l'audio final et fusion
         if status_callback:
             status_callback("Génération de l'audio traduit ...")
         final_audio = sum(audio_segments)
-        final_audio.export(TRANSLATED_AUDIO, format="wav")
+        final_audio.export(translated_audio, format="wav")
 
         if status_callback:
             status_callback("Fusion audio/vidéo ...")
-        combine_audio_video(input_video_path, TRANSLATED_AUDIO, output_video_path)
-        progress += 1
-        update_progress(progress / total_steps)
-        video_for_subs = output_video_path
+        combine_audio_video(original_video_path, translated_audio, output_video)
+        if progress_callback: progress_callback(0.7)
+        video_for_subs = output_video
     else:
-        video_for_subs = input_video_path
+        video_for_subs = original_video_path
 
     # 5. Génération et incrustation des sous-titres (si demandé)
     if add_subtitles:
-        srt_path = output_video_path.replace(".mp4", ".srt")
-        subtitled_video_path = output_video_path.replace(".mp4", "_subtitled.mp4")
+        subtitled_video_path = os.path.join(save_dir, "translated_subtitled.mp4")
         if status_callback:
             status_callback("Génération et incrustation des sous-titres ...")
         generate_srt(translated_segments, srt_path)
         burn_subtitles_on_video(video_for_subs, srt_path, subtitled_video_path)
-        progress += 1
-        update_progress(progress / total_steps)
-        if os.path.exists(EXTRACTED_AUDIO):
-            os.remove(EXTRACTED_AUDIO)
-        if os.path.exists(TRANSLATED_AUDIO):
-            os.remove(TRANSLATED_AUDIO)
-        if os.path.exists(output_video_path) and translate_audio:
-            os.remove(output_video_path)
-        if os.path.exists(srt_path):
-            os.remove(srt_path)
-        os.rename(subtitled_video_path, output_video_path)
-    else:
-        if os.path.exists(EXTRACTED_AUDIO):
-            os.remove(EXTRACTED_AUDIO)
-        if os.path.exists(TRANSLATED_AUDIO):
-            os.remove(TRANSLATED_AUDIO)
-        if not translate_audio and output_video_path != input_video_path:
-            import shutil
-            shutil.copy(input_video_path, output_video_path)
+        if progress_callback: progress_callback(0.9)
+        os.rename(subtitled_video_path, output_video)
+    if progress_callback: progress_callback(1.0)
+
+    # Nettoyage : on garde tout dans le dossier pour l'historique
+    return {
+        "history_dir": save_dir,
+        "original_video": original_video_path,
+        "translated_video": output_video,
+        "srt": srt_path
+    }
