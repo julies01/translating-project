@@ -1,0 +1,4 @@
+Mathis Herbin:
+    - Developed the backend for transcription, translation, and speech synthesis. (5h)
+    - Tested multiple models to determine the best balance between quality and speed. (10h)
+    - Researched new models and methods to further improve the process. (5h)
