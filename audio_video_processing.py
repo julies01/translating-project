@@ -13,6 +13,25 @@ import librosa
 import soundfile as sf
 import numpy as np
 
+# @brief Convert video to MP4 format for processing
+# @param input_path Path to input video file
+# @param output_path Path for converted MP4 file
+# @return None
+def convert_to_mp4(input_path, output_path):
+    """Convert any video format to MP4 using ffmpeg"""
+    cmd = [
+        'ffmpeg', '-i', input_path,
+        '-c:v', 'libx264',  # Video codec
+        '-c:a', 'aac',      # Audio codec
+        '-preset', 'medium', # Encoding speed vs quality
+        '-crf', '23',       # Quality (lower = better)
+        '-movflags', '+faststart',  # Web optimization
+        '-y',               # Overwrite output
+        output_path
+    ]
+    
+    subprocess.run(cmd, check=True, capture_output=True)
+
 """
 @brief Extract audio from video file using ffmpeg
 
@@ -106,6 +125,7 @@ def time_stretch_to_duration(audio_segment, target_duration_ms):
 @param lang Language code for speech synthesis
 @return AudioSegment containing the synthesized speech
 """
+
 def synthesize_speech_segment(text, lang="fr"):
     # Handle language code mapping for gTTS
     lang_gtts = lang

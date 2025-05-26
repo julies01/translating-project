@@ -100,9 +100,12 @@ for date, items in history_groups.items():
                 
                 # Button to view translation in main area
                 if st.button(lc.get_text("view_translation"), key=f"view_{folder}"):
-                    st.session_state.selected_video = translated
-                    st.session_state.selected_srt = srt if os.path.exists(srt) else None
+                    st.session_state.sidebar_video = translated
+                    st.session_state.sidebar_srt = srt if os.path.exists(srt) else None
                     st.rerun()
+                
+                if (st.session_state.get('sidebar_video') == translated):
+                    st.video(translated, format="video/mp4", start_time=0)
                 
                 # Download button for translated video
                 if os.path.exists(translated):
@@ -156,8 +159,11 @@ if 'selected_video' in st.session_state and st.session_state.selected_video:
             )
     st.divider()
 
-# File upload widget
-uploaded_file = st.file_uploader(lc.get_text("upload"), type=["mp4"])
+# File upload widget - now accepts multiple video formats
+uploaded_file = st.file_uploader(
+    lc.get_text("upload"), 
+    type=["mp4", "mov", "avi", "wmv", "flv", "mkv", "webm", "m4v", "3gp"]
+)
 
 # Translation languages adapted to interface language
 LANGUAGES = lc.get_languages()

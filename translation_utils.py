@@ -105,9 +105,17 @@ def setup_directories_and_paths(input_video_path, save_dir):
         save_dir = os.path.join("history", f"{timestamp}_{unique_id}")
     os.makedirs(save_dir, exist_ok=True)
 
-    # Copy original video to working directory (for history preservation)
-    original_video_path = os.path.join(save_dir, "original.mp4")
-    shutil.copy(input_video_path, original_video_path) 
+    input_ext = os.path.splitext(input_video_path)[1].lower()
+
+    # If input is not MP4, convert it
+    if input_ext != '.mp4':
+        original_video_path = os.path.join(save_dir, "original.mp4")
+        av.convert_to_mp4(input_video_path, original_video_path)
+    else:
+        # Copy original video to history directory
+        original_video_path = os.path.join(save_dir, "original.mp4")
+        shutil.copy2(input_video_path, original_video_path)
+    
 
     # Define paths for temporary and output files
     extracted_audio = os.path.join(save_dir, "audio.wav")

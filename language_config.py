@@ -13,7 +13,7 @@ def get_text(key):
         "fr": {
             "title": "🎬 Traducteur de Vidéo Automatique",
             "history": "🕑  Historique des traductions",
-            "upload": "Télécharge ta vidéo à traduire (format mp4)",
+            "upload": "Télécharge ta vidéo à traduire (MP4, MOV, AVI, WMV, etc.)",
             "choose_lang": "Choisis la langue de traduction :",
             "translate_audio": "Traduire l'audio",
             "add_subtitles": "Ajouter les sous-titres",
@@ -30,7 +30,7 @@ def get_text(key):
         "en": {
             "title": "🎬 Automatic Video Translator",
             "history": "🕑  Translation History",
-            "upload": "Upload your video to translate (mp4 format)",
+            "upload": "Upload your video to translate (MP4, MOV, AVI, WMV, etc.)",
             "choose_lang": "Choose translation language :",
             "translate_audio": "Translate audio",
             "add_subtitles": "Add subtitles",
@@ -47,7 +47,7 @@ def get_text(key):
         "zh": {
             "title": "🎬 自动视频翻译器",
             "history": "🕑  翻译历史",
-            "upload": "上传您要翻译的视频（mp4格式）",
+            "upload": "上传您要翻译的视频（MP4, MOV, AVI, WMV等）",
             "choose_lang": "选择翻译语言：",
             "translate_audio": "翻译音频",
             "add_subtitles": "添加字幕",
