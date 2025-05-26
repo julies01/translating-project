@@ -2,3 +2,10 @@ Mathis Herbin:
     - Developed the backend for transcription, translation, and speech synthesis. (5h)
     - Tested multiple models to determine the best balance between quality and speed. (10h)
     - Researched new models and methods to further improve the process. (5h)
+
+Julie BENED : 
+    - First developed backend for transcription, translation of SRT files, and adding SRT files to video (on her side) (7h)
+    - Created an interface with Streamlit (3h)
+    - Experimentations and research of use of different APIs and models for better translation (4h)
+    - Created adds-on for the website like ability to view translation history, "having an issue" part, changing the website's language, ability to use files of different mp4 formats (5h)
+    - Tidied up the code (adding comments, improving modularity) (1h)
