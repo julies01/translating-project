@@ -49,7 +49,7 @@ A Streamlit app for automatic video translation and subtitling using WhisperX, O
 
 1. **Start Ollama** with the desired model:
    ```bash
-   ollama run serve
+   ollama serve
    ```
 2. **Run the Streamlit app**:
    ```bash
