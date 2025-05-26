@@ -1,0 +1,66 @@
+.main .block-container {
+    max-width: none;
+    padding-top: 1rem;
+}
+
+.stButton > button {
+    width: 100%;
+    font-size: 1.2rem;
+    background-color: #f0f2f6 !important;
+    color: black !important;
+    border: none !important;
+    border-radius: 0.5rem !important;
+    padding: 0.5rem 1rem !important;
+    transition: background-color 0.3s ease !important;
+}
+
+.stButton > button:hover {
+    background-color: #f0f2f6 !important;
+    color: black !important;
+}
+
+.stButton > button:focus {
+    background-color: #f0f2f6 !important;
+    color: black !important;
+    box-shadow: 0 0 0 2px rgba(108, 123, 127, 0.3) !important;
+}
+
+[data-testid="stFileUploader"] label p {
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+}
+
+[data-testid="stSelectbox"] label p {
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+}
+
+.stFileUploader > label {
+    margin-bottom: 1rem !important;
+}
+
+.stSelectbox > label {
+    margin-bottom: 1rem !important;
+}
+
+.stCheckbox {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.stCheckbox > label {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.stDownloadButton {
+    display: flex !important;
+    justify-content: center !important;
+}
+
+.stDownloadButton > button {
+    margin: 0 auto !important;
+}
