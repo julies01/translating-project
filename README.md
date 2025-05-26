@@ -34,7 +34,7 @@ A Streamlit app for automatic video translation and subtitling using WhisperX, O
   [Ollama install instructions](https://ollama.com/download)  
   Start the model before running the app:
   ```bash
-  ollama run qwen3:8b
+  ollama serve
   ```
 
 - **Python packages**  
@@ -49,7 +49,7 @@ A Streamlit app for automatic video translation and subtitling using WhisperX, O
 
 1. **Start Ollama** with the desired model:
    ```bash
-   ollama run qwen3:8b
+   ollama run serve
    ```
 2. **Run the Streamlit app**:
    ```bash
