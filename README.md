@@ -66,11 +66,15 @@ A Streamlit app for automatic video translation and subtitling using WhisperX, O
 ## Project Structure
 
 ```
-.
-├── app.py                # Streamlit user interface
-├── backend.py            # Video/audio processing and translation logic
-├── history/              # Stores all translation results and originals
-├── README.md
+translating-project/
+├── app.py                    # Interface principale Streamlit
+├── backend.py               # Logique de traitement vidéo
+├── language_config.py       # Configuration des langues et traductions
+├── translation_utils.py     # Utilitaires de traduction et setup
+├── audio_video_processing.py # Traitement audio/vidéo avec FFmpeg
+├── style.css               # Styles CSS personnalisés
+├── history/                # Dossier de sauvegarde des traductions
+└── README.md
 ```
 
 ---
