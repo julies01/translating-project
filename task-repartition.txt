@@ -13,3 +13,5 @@ Julie BENED :
 Mathéo DESMARET : 
     - I tried to split each voiceline of each speaker, it was supposed to understand when the speaker 1 was speaking and when the speaker 2 was speaking too. Unfortunatly it was not working well and too heavy for the rest of the code. (6)
 
+Loïc MORIN : 
+    - Nothing I did made it into the final project because Julie and Mathis are faster and better than me.
