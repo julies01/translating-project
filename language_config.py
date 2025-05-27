@@ -8,7 +8,6 @@ import streamlit as st
 """
 
 def get_text(key):
-    """Retourne le texte dans la langue sélectionnée"""
     texts = {
         "fr": {
             "title": "🎬 Traducteur de Vidéo Automatique",
@@ -25,7 +24,9 @@ def get_text(key):
             "select_option": "Veuillez sélectionner au moins une option : Traduire l'audio ou Ajouter les sous-titres.",
             "having_issue": "Vous rencontrez un problème ?",
             "go_readme": "Voir le README",
-            "submit_issue": "Signaler un problème"
+            "submit_issue": "Signaler un problème",
+            "clear_all_files": "Vider l'historique",
+            "history_cleared": "Historique vidé avec succès !"
         },
         "en": {
             "title": "🎬 Automatic Video Translator",
@@ -42,7 +43,9 @@ def get_text(key):
             "select_option": "Please select at least one option: Translate audio or Add subtitles.",
             "having_issue": "Having an issue ?",
             "go_readme": "Go to README",
-            "submit_issue": "Submit an Issue"
+            "submit_issue": "Submit an Issue",
+            "clear_all_files": "Clear All History",
+            "history_cleared": "History cleared successfully!"
         },
         "zh": {
             "title": "🎬 自动视频翻译器",
@@ -59,7 +62,9 @@ def get_text(key):
             "select_option": "请至少选择一个选项：翻译音频或添加字幕。",
             "having_issue": "遇到问题了吗？",
             "go_readme": "查看说明文档",
-            "submit_issue": "提交问题"
+            "submit_issue": "提交问题",
+            "clear_all_files": "清空历史记录",
+            "history_cleared": "历史记录清空成功"
         }
     }
     lang = st.session_state.get('interface_lang', 'fr')

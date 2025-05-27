@@ -8,6 +8,7 @@ from datetime import datetime
 import unicodedata
 import re
 import language_config as lc
+import shutil
 
 
 # Configure page to use full width
@@ -21,6 +22,19 @@ st.set_page_config(page_title="Video Translator", layout="wide")
 def load_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+# @brief Delete all files and folders in the history directory
+# @return None
+# @details Removes all content from HISTORY_DIR while keeping the directory itself
+def clear_history():
+    """Clear all files and folders in the history directory"""
+    if os.path.exists(HISTORY_DIR):
+        for item in os.listdir(HISTORY_DIR):
+            item_path = os.path.join(HISTORY_DIR, item)
+            if os.path.isfile(item_path):
+                os.remove(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
 
 # Load CSS styles
 load_css('style.css')
@@ -128,6 +142,25 @@ for date, items in history_groups.items():
                             mime="text/plain",
                             key=f"dl_srt_{folder}"
                         )
+
+if history_groups:  # Only show if there's history to clear
+    st.sidebar.markdown("---")  # Separator line
+    st.sidebar.markdown("")  # Add spacing
+    
+    if st.sidebar.button(
+        lc.get_text("clear_all_files"), 
+        type="secondary",
+        use_container_width=True,
+        key="clear_all_history"
+    ):
+        clear_history()
+        # Clear any selected videos from session state
+        if 'sidebar_video' in st.session_state:
+            del st.session_state.sidebar_video
+        if 'sidebar_srt' in st.session_state:
+            del st.session_state.sidebar_srt
+        st.sidebar.success(lc.get_text("history_cleared"))
+        st.rerun()
 
 # Main page title
 st.title(lc.get_text("title"))
