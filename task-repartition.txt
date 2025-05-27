@@ -9,3 +9,7 @@ Julie BENED :
     - Experimentations and research of use of different APIs and models for better translation (4h)
     - Created adds-on for the website like ability to view translation history, "having an issue" part, changing the website's language, ability to use files of different mp4 formats (5h)
     - Tidied up the code (adding comments, improving modularity) (1h)
+
+Mathéo DESMARET : 
+    - I tried to split each voiceline of each speaker, it was supposed to understand when the speaker 1 was speaking and when the speaker 2 was speaking too. Unfortunatly it was not working well and too heavy for the rest of the code. (6)
+
